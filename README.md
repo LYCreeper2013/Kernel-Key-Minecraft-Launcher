@@ -13,7 +13,7 @@
 
 ## 下载与使用
 
-👉 前往 [Releases](https://github.com/liuyue290) 下载对应系统的启动器包。
+👉 前往 [Releases](https://github.com/LYCreeper2013/Kernel-Key-Minecraft-Launcher-Version) 下载对应系统的启动器包。
 
 | 系统 | 格式              |
 |----|-----------------|
