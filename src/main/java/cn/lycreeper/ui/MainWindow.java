@@ -32,7 +32,7 @@ public class MainWindow extends JFrame {
         // 设置窗口图标（可选）
         try {
             setIconImage(Toolkit.getDefaultToolkit().getImage(
-                    getClass().getResource("/icons/minecraft.png")));
+                    getClass().getResource("/KKMCL.ico")));
         } catch (Exception e) {
             // 忽略图标加载失败
         }

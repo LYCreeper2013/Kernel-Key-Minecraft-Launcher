@@ -40,7 +40,7 @@ public class LauncherPanel extends JPanel {
     private JLabel microsoftUUIDLabel;
 
     // 数据
-    private final String gameDirectory = System.getProperty("user.home") + File.separator + ".minecraft";
+    private final String gameDirectory = System.getProperty("user.dir") + "\\.minecraft";
     private MicrosoftAuthenticator authenticator;
     private MicrosoftAuthenticator.MicrosoftAccount microsoftAccount;
     private final VersionManager versionManager;

@@ -108,7 +108,7 @@ public class DownloadPanel extends JPanel {
     private String currentModpackSlug;
 
     // 游戏目录
-    private final String gameDir = System.getProperty("user.home") + File.separator + ".minecraft";
+    private final String gameDir = System.getProperty("user.dir") + "\\.minecraft";
 
     // 版本清单缓存
     private List<VersionManifestEntry> allVersions;

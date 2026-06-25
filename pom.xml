@@ -79,6 +79,41 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- 使用 Launch4j 将 JAR 包装成 EXE -->
+            <plugin>
+                <groupId>com.akathist.maven.plugins.launch4j</groupId>
+                <artifactId>launch4j-maven-plugin</artifactId>
+                <version>2.1.1</version>
+                <executions>
+                    <execution>
+                        <id>l4j-cli</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>launch4j</goal>
+                        </goals>
+                        <configuration>
+                            <!-- 输入：maven-shade-plugin 生成的胖 JAR -->
+                            <jar>${project.build.directory}/${project.build.finalName}.jar</jar>
+                            <!-- 输出：EXE 文件 -->
+                            <outfile>${project.build.directory}/${project.build.finalName}.exe</outfile>
+                            <!-- 主类（必须与 shade 插件中设置的一致） -->
+
+                            <!-- 不捆绑 JRE，运行依赖系统 JRE -->
+                            <dontWrapJar>false</dontWrapJar>
+                            <!-- 界面类型：gui=无命令行窗口，console=有控制台窗口（调试用） -->
+                            <headerType>gui</headerType>
+                            <!-- 图标（可选），将你的 .ico 文件放在 src/main/resources/ 下 -->
+                            <icon>${project.basedir}/src/main/resources/KKMCL.ico</icon>
+                            <!-- 最低 JRE 版本检测 -->
+                            <jre>
+                                <minVersion>1.8.0</minVersion>
+                            </jre>
+                            <!-- 版本信息（可选） -->
+
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

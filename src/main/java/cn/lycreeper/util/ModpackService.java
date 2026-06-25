@@ -226,7 +226,7 @@ public class ModpackService {
                 for (JsonElement elem : array) {
                     JsonObject obj = elem.getAsJsonObject();
                     ModpackVersion version = parseModpackVersion(obj);
-                    
+
                     if (version.files == null || version.files.isEmpty()) continue;
                     boolean hasValidFile = false;
                     for (ModpackFile file : version.files) {
@@ -381,7 +381,7 @@ public class ModpackService {
 
                 String versionName = slug + "-" + version.versionNumber;
                 Path versionDir = Paths.get(gameDir, "versions", versionName);
-                
+
                 // 确保基础版本已安装
                 logCallback.accept("检查并安装 Minecraft " + mcVersion + "...");
                 installMinecraftVersion(mcVersion, loader, logCallback, progressCallback);
@@ -428,7 +428,8 @@ public class ModpackService {
                 progressCallback.accept(45);
 
                 logCallback.accept("解析整合包配置...");
-                parseAndInstallDependencies(modpackDir, versionDir, logCallback, progressCallback);
+                // 修改：传入游戏根目录而不是版本目录
+                parseAndInstallDependencies(modpackDir, Paths.get(gameDir), logCallback, progressCallback);
 
                 progressCallback.accept(70);
 
@@ -487,8 +488,8 @@ public class ModpackService {
         return "fabric";
     }
 
-    private void installMinecraftVersion(String mcVersion, String loader, 
-                                         Consumer<String> logCallback, 
+    private void installMinecraftVersion(String mcVersion, String loader,
+                                         Consumer<String> logCallback,
                                          Consumer<Integer> progressCallback) {
         try {
             VersionDownloader downloader = new VersionDownloader(gameDir);
@@ -512,29 +513,29 @@ public class ModpackService {
      */
     private void copyMinecraftJar(String mcVersion, String versionName, Path versionDir, Consumer<String> logCallback) throws IOException {
         Path targetJar = versionDir.resolve(versionName + ".jar");
-        
+
         // 如果已经存在，跳过
         if (Files.exists(targetJar)) {
             logCallback.accept("jar 文件已存在: " + targetJar);
             return;
         }
-        
+
         // 查找基础版本的 jar 文件
         Path sourceJar = findBaseVersionJar(mcVersion);
-        
+
         if (sourceJar != null && Files.exists(sourceJar)) {
             Files.copy(sourceJar, targetJar, StandardCopyOption.REPLACE_EXISTING);
             logCallback.accept("已复制 jar 文件: " + sourceJar.getFileName() + " -> " + versionName + ".jar");
         } else {
             logCallback.accept("警告: 未找到基础版本 jar 文件 " + mcVersion);
             logCallback.accept("尝试从 VersionDownloader 获取...");
-            
+
             // 尝试重新下载基础版本
             try {
                 VersionDownloader downloader = new VersionDownloader(gameDir);
                 downloader.setLogCallback(logCallback);
                 downloader.downloadVersion(mcVersion, "vanilla");
-                
+
                 // 再次查找
                 sourceJar = findBaseVersionJar(mcVersion);
                 if (sourceJar != null && Files.exists(sourceJar)) {
@@ -549,21 +550,21 @@ public class ModpackService {
             }
         }
     }
-    
+
     /**
      * 查找基础版本的 jar 文件
      */
     private Path findBaseVersionJar(String mcVersion) throws IOException {
         Path versionsDir = Paths.get(gameDir, "versions");
-        
+
         // 尝试多种可能的文件名
         String[] possibleNames = {
-            mcVersion + ".jar",
-            mcVersion + "-" + mcVersion + ".jar",
-            mcVersion + "-forge.jar",
-            mcVersion + "-fabric.jar"
+                mcVersion + ".jar",
+                mcVersion + "-" + mcVersion + ".jar",
+                mcVersion + "-forge.jar",
+                mcVersion + "-fabric.jar"
         };
-        
+
         // 首先尝试标准路径
         for (String name : possibleNames) {
             Path jarPath = versionsDir.resolve(mcVersion).resolve(name);
@@ -571,7 +572,7 @@ public class ModpackService {
                 return jarPath;
             }
         }
-        
+
         // 搜索包含该版本名的目录
         try (var stream = Files.list(versionsDir)) {
             for (Path versionPath : (Iterable<Path>) stream::iterator) {
@@ -587,8 +588,8 @@ public class ModpackService {
                         // 尝试任何 jar 文件
                         try (var jarStream = Files.list(versionPath)) {
                             for (Path jarPath : (Iterable<Path>) jarStream::iterator) {
-                                if (jarPath.toString().endsWith(".jar") && 
-                                    jarPath.getFileName().toString().contains(mcVersion)) {
+                                if (jarPath.toString().endsWith(".jar") &&
+                                        jarPath.getFileName().toString().contains(mcVersion)) {
                                     return jarPath;
                                 }
                             }
@@ -597,7 +598,7 @@ public class ModpackService {
                 }
             }
         }
-        
+
         return null;
     }
 
@@ -625,11 +626,14 @@ public class ModpackService {
         logCallback.accept("解压完成");
     }
 
-    private void parseAndInstallDependencies(Path modpackDir, Path versionDir, 
-                                             Consumer<String> logCallback, 
+    /**
+     * 解析并安装依赖（修复版 - MOD安装到游戏根目录）
+     */
+    private void parseAndInstallDependencies(Path modpackDir, Path gameRootDir,
+                                             Consumer<String> logCallback,
                                              Consumer<Integer> progressCallback) throws IOException {
         Path indexFile = modpackDir.resolve("modrinth.index.json");
-        
+
         // 调试：打印解压后的目录结构
         logCallback.accept("=== 解压目录内容 ===");
         try (var stream = Files.list(modpackDir)) {
@@ -638,17 +642,27 @@ public class ModpackService {
                 logCallback.accept(type + " " + p.getFileName());
             }
         }
-        
+
+        // 使用游戏根目录，而不是版本目录
+        Path modsDir = gameRootDir.resolve("mods");
+        Path configDir = gameRootDir.resolve("config");
+        Path scriptsDir = gameRootDir.resolve("scripts");
+
+        // 创建必要的目录
+        Files.createDirectories(modsDir);
+        Files.createDirectories(configDir);
+        Files.createDirectories(scriptsDir);
+
         if (!Files.exists(indexFile)) {
             logCallback.accept("未找到 modrinth.index.json，尝试传统格式...");
-            // 尝试传统格式：直接复制 mods 和 config 目录
-            handleTraditionalFormat(modpackDir, versionDir, logCallback, progressCallback);
+            // 修改：传入游戏根目录
+            handleTraditionalFormat(modpackDir, gameRootDir, logCallback, progressCallback);
             return;
         }
 
         String content = Files.readString(indexFile, StandardCharsets.UTF_8);
         logCallback.accept("找到 modrinth.index.json，大小: " + content.length() + " 字节");
-        
+
         JsonObject json = JsonParser.parseString(content).getAsJsonObject();
 
         if (!json.has("files")) {
@@ -657,11 +671,6 @@ public class ModpackService {
         }
 
         JsonArray files = json.getAsJsonArray("files");
-        
-        Path versionModsDir = versionDir.resolve("mods");
-        Files.createDirectories(versionModsDir);
-        Files.createDirectories(versionDir.resolve("config"));
-        Files.createDirectories(versionDir.resolve("scripts"));
 
         int total = files.size();
         int processed = 0;
@@ -670,7 +679,8 @@ public class ModpackService {
         int failCount = 0;
 
         logCallback.accept("需要处理 " + total + " 个文件");
-        logCallback.accept("模组安装目录: " + versionModsDir.toString());
+        logCallback.accept("MOD安装目录: " + modsDir.toString());
+        logCallback.accept("Config安装目录: " + configDir.toString());
 
         for (JsonElement fileElem : files) {
             JsonObject fileObj;
@@ -683,23 +693,34 @@ public class ModpackService {
 
             String path = fileObj.has("path") ? fileObj.get("path").getAsString() : "";
 
+            // 检查文件类型
             boolean isMod = path.startsWith("mods/") || path.contains("/mods/");
             boolean isConfig = path.startsWith("config/") || path.contains("/config/");
-            
-            if (!isMod && !isConfig) {
+            boolean isScript = path.startsWith("scripts/") || path.contains("/scripts/");
+
+            if (!isMod && !isConfig && !isScript) {
                 processed++;
                 continue;
             }
 
             String fileName = path.substring(path.lastIndexOf('/') + 1);
-            
+
             Path destPath;
             if (isMod && (fileName.endsWith(".jar") || fileName.endsWith(".litemod"))) {
-                destPath = versionModsDir.resolve(fileName);
+                // MOD文件安装到游戏根目录的mods文件夹
+                String relativePath = path.startsWith("mods/") ?
+                        path.substring("mods/".length()) : path;
+                destPath = modsDir.resolve(relativePath);
+                Files.createDirectories(destPath.getParent());
             } else if (isConfig) {
-                String relativePath = path.startsWith("config/") ? 
-                    path.substring("config/".length()) : path;
-                destPath = versionDir.resolve("config").resolve(relativePath);
+                String relativePath = path.startsWith("config/") ?
+                        path.substring("config/".length()) : path;
+                destPath = configDir.resolve(relativePath);
+                Files.createDirectories(destPath.getParent());
+            } else if (isScript) {
+                String relativePath = path.startsWith("scripts/") ?
+                        path.substring("scripts/".length()) : path;
+                destPath = scriptsDir.resolve(relativePath);
                 Files.createDirectories(destPath.getParent());
             } else {
                 processed++;
@@ -710,7 +731,7 @@ public class ModpackService {
 
             if (downloadUrl != null && !downloadUrl.isEmpty()) {
                 if (!Files.exists(destPath)) {
-                    logCallback.accept("下载文件: " + fileName);
+                    logCallback.accept("下载文件: " + fileName + " -> " + destPath);
                     try {
                         downloadFileWithRetry(downloadUrl, destPath, null, 2).get();
                         logCallback.accept("✓ 下载完成: " + fileName);
@@ -720,12 +741,26 @@ public class ModpackService {
                         failCount++;
                     }
                 } else {
-                    logCallback.accept("文件已存在: " + fileName);
+                    logCallback.accept("文件已存在，跳过: " + fileName);
                     skipCount++;
                 }
             } else {
-                logCallback.accept("跳过 (无有效下载链接): " + fileName);
-                skipCount++;
+                // 尝试从本地已解压的文件复制
+                Path localFile = modpackDir.resolve(path);
+                if (Files.exists(localFile)) {
+                    logCallback.accept("从本地复制: " + fileName);
+                    try {
+                        Files.createDirectories(destPath.getParent());
+                        Files.copy(localFile, destPath, StandardCopyOption.REPLACE_EXISTING);
+                        successCount++;
+                    } catch (Exception e) {
+                        logCallback.accept("✗ 复制失败: " + fileName + " - " + e.getMessage());
+                        failCount++;
+                    }
+                } else {
+                    logCallback.accept("跳过 (无有效下载链接): " + fileName);
+                    skipCount++;
+                }
             }
 
             processed++;
@@ -737,36 +772,59 @@ public class ModpackService {
 
         logCallback.accept("依赖处理完成: 成功 " + successCount + ", 跳过 " + skipCount + ", 失败 " + failCount);
     }
-    
+
     /**
-     * 处理传统格式的整合包（直接包含 mods 文件夹）
+     * 处理传统格式的整合包（直接包含 mods 文件夹）- 修复版
      */
-    private void handleTraditionalFormat(Path modpackDir, Path versionDir, 
-                                         Consumer<String> logCallback, 
+    private void handleTraditionalFormat(Path modpackDir, Path gameRootDir,
+                                         Consumer<String> logCallback,
                                          Consumer<Integer> progressCallback) throws IOException {
         logCallback.accept("尝试传统格式处理...");
-        
-        // 检查是否有 mods 目录
+
+        // 检查是否有 mods 目录，复制到游戏根目录
         Path directMods = modpackDir.resolve("mods");
         if (Files.exists(directMods)) {
-            logCallback.accept("发现传统格式 mods 目录，直接复制");
-            Path targetMods = versionDir.resolve("mods");
+            logCallback.accept("发现传统格式 mods 目录，复制到游戏根目录");
+            Path targetMods = gameRootDir.resolve("mods");
             copyDirectory(directMods, targetMods);
         }
-        
+
         // 检查是否有 config 目录
         Path directConfig = modpackDir.resolve("config");
         if (Files.exists(directConfig)) {
-            logCallback.accept("复制 config 目录");
-            Path targetConfig = versionDir.resolve("config");
+            logCallback.accept("复制 config 目录到游戏根目录");
+            Path targetConfig = gameRootDir.resolve("config");
             copyDirectory(directConfig, targetConfig);
         }
-        
-        // 检查是否有 overrides 目录
+
+        // 检查是否有 scripts 目录
+        Path directScripts = modpackDir.resolve("scripts");
+        if (Files.exists(directScripts)) {
+            logCallback.accept("复制 scripts 目录到游戏根目录");
+            Path targetScripts = gameRootDir.resolve("scripts");
+            copyDirectory(directScripts, targetScripts);
+        }
+
+        // 检查是否有 overrides 目录（覆盖文件）
         Path overridesDir = modpackDir.resolve("overrides");
         if (Files.exists(overridesDir)) {
-            logCallback.accept("复制 overrides 目录");
-            copyOverridesToVersion(modpackDir, versionDir, logCallback);
+            logCallback.accept("复制 overrides 目录到游戏根目录");
+            copyDirectory(overridesDir, gameRootDir);
+        }
+
+        // 检查根目录下是否有直接的jar文件（某些整合包直接把mod放在根目录）
+        try (var stream = Files.newDirectoryStream(modpackDir, "*.jar")) {
+            boolean hasJars = false;
+            for (Path jarPath : stream) {
+                if (!hasJars) {
+                    logCallback.accept("发现根目录下的jar文件，复制到mods目录");
+                    hasJars = true;
+                }
+                Path targetMod = gameRootDir.resolve("mods").resolve(jarPath.getFileName());
+                Files.createDirectories(targetMod.getParent());
+                Files.copy(jarPath, targetMod, StandardCopyOption.REPLACE_EXISTING);
+                logCallback.accept("  复制: " + jarPath.getFileName());
+            }
         }
     }
 
@@ -824,7 +882,7 @@ public class ModpackService {
         }
 
         String[] dirsToCopy = {"config", "scripts", "kubejs", "shaderpacks", "resourcepacks",
-                "defaultconfigs", "patchouli_books", "structures", "bin", "advancements", 
+                "defaultconfigs", "patchouli_books", "structures", "bin", "advancements",
                 "datapacks", "libraries", "assets"};
 
         for (String dirName : dirsToCopy) {
@@ -841,8 +899,8 @@ public class ModpackService {
             for (Path sourcePath : stream) {
                 if (Files.isRegularFile(sourcePath)) {
                     String fileName = sourcePath.getFileName().toString();
-                    if (fileName.endsWith(".mcmeta") || fileName.equals("pack.png") || 
-                        fileName.endsWith(".json") || fileName.equals("pack.txt")) {
+                    if (fileName.endsWith(".mcmeta") || fileName.equals("pack.png") ||
+                            fileName.endsWith(".json") || fileName.equals("pack.txt")) {
                         Path targetPath = versionDir.resolve(fileName);
                         Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
                         logCallback.accept("复制文件: " + fileName);
@@ -850,11 +908,11 @@ public class ModpackService {
                 }
             }
         }
-        
+
         Path overridesMods = overridesDir.resolve("mods");
         if (Files.exists(overridesMods)) {
             Path targetMods = versionDir.resolve("mods");
-            logCallback.accept("复制 overrides/mods 目录");
+            logCallback.accept("复制 overrides/mods 目录到版本目录（仅限特殊配置）");
             copyDirectory(overridesMods, targetMods);
         }
     }
@@ -930,7 +988,7 @@ public class ModpackService {
 
         logCallback.accept("已创建版本配置: " + versionName);
         logCallback.accept("版本目录: " + versionDir.toString());
-        
+
         // 验证 jar 文件是否存在
         Path jarFile = versionDir.resolve(versionName + ".jar");
         if (Files.exists(jarFile)) {
