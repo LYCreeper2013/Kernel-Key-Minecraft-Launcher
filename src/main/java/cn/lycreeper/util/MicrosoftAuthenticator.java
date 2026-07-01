@@ -16,7 +16,7 @@ import java.time.Instant;
 
 public class MicrosoftAuthenticator {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final String CLIENT_ID = "8cdd8deb-b94e-444f-a348-acba988da0bd";
+    private static final String CLIENT_ID = "替换为你的CLIENT_ID";
 
     private final LoginCallback callback;
     private volatile boolean cancelled = false;
